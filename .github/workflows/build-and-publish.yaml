@@ -1,0 +1,102 @@
+name: Build ci/cd tools image and publish to DockerHub
+
+on:
+  push:
+    tags:
+      - '*'
+
+env:
+  DOCKERHUB_REPO: letsdone/ci-tools
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: github.event.repository.owner.id == github.event.sender.id
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: git
+            suffix: "-git"
+            latest: false
+            KUBECTL_PREINSTALLED: false
+            DOCKER_CLI_PREINSTALLED: false
+            GIT_PREINSTALLED: true
+            NODEJS_PREINSTALLED: false
+
+          - name: nodejs
+            suffix: "-nodejs"
+            latest: false
+            KUBECTL_PREINSTALLED: false
+            DOCKER_CLI_PREINSTALLED: false
+            GIT_PREINSTALLED: false
+            NODEJS_PREINSTALLED: true
+
+          - name: git-nodejs
+            suffix: "-git-nodejs"
+            latest: false
+            KUBECTL_PREINSTALLED: false
+            DOCKER_CLI_PREINSTALLED: false
+            GIT_PREINSTALLED: true
+            NODEJS_PREINSTALLED: true
+
+          - name: docker-git-nodejs
+            suffix: "-docker-git-nodejs"
+            latest: false
+            KUBECTL_PREINSTALLED: false
+            DOCKER_CLI_PREINSTALLED: true
+            GIT_PREINSTALLED: true
+            NODEJS_PREINSTALLED: true
+
+          - name: kubectl-git-nodejs
+            suffix: "-kubectl-git-nodejs"
+            latest: false
+            KUBECTL_PREINSTALLED: true
+            DOCKER_CLI_PREINSTALLED: false
+            GIT_PREINSTALLED: true
+            NODEJS_PREINSTALLED: true
+
+          - name: all
+            suffix: "-all"
+            latest: true
+            KUBECTL_PREINSTALLED: true
+            DOCKER_CLI_PREINSTALLED: true
+            GIT_PREINSTALLED: true
+            NODEJS_PREINSTALLED: true
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Generate App Version
+        run: echo "APP_VERSION=$(git describe --tags --always)" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Prepare tags
+        id: prep
+        run: |
+          TAGS="${DOCKERHUB_REPO}:${APP_VERSION}${{ matrix.suffix }}"
+          if [ "${{ matrix.latest }}" = "true" ]; then
+            TAGS="$TAGS,${DOCKERHUB_REPO}:latest"
+          fi
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push (${{ matrix.name }})
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.prep.outputs.tags }}
+          build-args: |
+            KUBECTL_PREINSTALLED=${{ matrix.KUBECTL_PREINSTALLED }}
+            DOCKER_CLI_PREINSTALLED=${{ matrix.DOCKER_CLI_PREINSTALLED }}
+            GIT_PREINSTALLED=${{ matrix.GIT_PREINSTALLED }}
+            NODEJS_PREINSTALLED=${{ matrix.NODEJS_PREINSTALLED }}
