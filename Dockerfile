@@ -11,7 +11,7 @@ RUN set -eux; \
         apk add --no-cache kubectl; \
     fi; \
     if [ "${DOCKER_CLI_PREINSTALLED}" = "true" ]; then \
-        apk add --no-cache docker-cli; \
+        apk add --no-cache docker-cli docker-cli-buildx; \
     fi; \
     if [ "${GIT_PREINSTALLED}" = "true" ]; then \
         apk add --no-cache git; \
